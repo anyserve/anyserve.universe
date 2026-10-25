@@ -11,10 +11,12 @@ routes opaque bytes; the worker decides what they mean.
 | [`vllm/`](vllm) | vLLM or any OpenAI-compatible server | chat completions request | response body, or one output frame per server-sent event when streaming |
 | [`comfyui/`](comfyui) | ComfyUI | workflow in API format | the first image the workflow saved |
 | [`video/`](video) | Ultralytics YOLO | live JPEG frames over a duplex Invoke | annotated frames |
+| [`vla/`](vla) | a vision-language-action policy (simulated, swappable for a real model) | one robot observation: instruction, state, camera frame | a chunk of actions for the next control ticks |
 
-[`setup/`](setup) is a static page that writes a `server.toml` and the matching
+[`setup/`](setup) is a page that writes a `server.toml` and the matching
 `anyserve serve` command from a form, with the client and worker snippets that
-connect to it. It is published at https://anyserve.github.io/anyserve.universe/.
+connect to it. These pages are published at https://anyserve.github.io/anyserve.universe/
+from the READMEs in this repository.
 
 Every example needs a running control plane and the `anyserve` Python package
 (Python 3.12+):

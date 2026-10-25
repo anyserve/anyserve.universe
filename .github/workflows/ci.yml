@@ -17,7 +17,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python -m compileall -q triton vllm comfyui video
+      - run: python -m compileall -q triton vllm comfyui video vla
+      - run: python -m pip install markdown && python site/build.py
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
