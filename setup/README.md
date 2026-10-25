@@ -5,7 +5,7 @@ with the matching `anyserve serve` command and the client and worker snippets
 that connect to it. Only values that differ from the defaults are written, so
 the file stays as short as the deployment needs. Nothing leaves the browser.
 
-Open it from the published site, or serve the directory locally:
+Open https://anyserve.github.io/anyserve.universe/, or serve the directory locally:
 
 ```bash
 python -m http.server --directory setup 8080

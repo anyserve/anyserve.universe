@@ -14,7 +14,7 @@ routes opaque bytes; the worker decides what they mean.
 
 [`setup/`](setup) is a static page that writes a `server.toml` and the matching
 `anyserve serve` command from a form, with the client and worker snippets that
-connect to it; it is published with GitHub Pages from this repository.
+connect to it. It is published at https://anyserve.github.io/anyserve.universe/.
 
 Every example needs a running control plane and the `anyserve` Python package
 (Python 3.12+):
