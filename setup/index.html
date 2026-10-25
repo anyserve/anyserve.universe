@@ -1,0 +1,329 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Anyserve setup</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: "Inter", "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+        --bg: #f6f7f9;
+        --surface: #fff;
+        --surface-muted: #f9fafb;
+        --line: #e4e7eb;
+        --line-strong: #d2d7de;
+        --text: #1b2430;
+        --muted: #667085;
+        --subtle: #98a2b3;
+        --accent: #3557d6;
+        --accent-soft: #eaf0ff;
+        --danger: #b42318;
+        --mono: "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+        --shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 1px 3px rgba(16, 24, 40, 0.06);
+      }
+      * { box-sizing: border-box; }
+      body { margin: 0; background: var(--bg); color: var(--text); -webkit-font-smoothing: antialiased; }
+      button, input, textarea { font: inherit; }
+      button { cursor: pointer; }
+      code { font-family: var(--mono); font-size: 0.92em; }
+      .top { display: flex; align-items: center; gap: 10px; height: 56px; padding: 0 28px; background: var(--surface); border-bottom: 1px solid var(--line); }
+      .mark { width: 10px; height: 10px; border-radius: 3px; background: var(--accent); }
+      .top strong { font-size: 14px; }
+      .top__title { color: var(--muted); font-size: 13px; }
+      .top__link { margin-left: auto; color: var(--muted); font-size: 13px; text-decoration: none; }
+      .top__link:hover { color: var(--text); }
+      .setup { display: grid; grid-template-columns: minmax(0, 1fr) 460px; gap: 20px; padding: 20px 28px 40px; max-width: 1480px; margin: 0 auto; }
+      .setup__form, .setup__output { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+      .setup__output { position: sticky; top: 20px; align-self: start; max-height: calc(100vh - 40px); overflow: auto; }
+      .intro h1 { margin: 0 0 6px; font-size: 18px; font-weight: 650; letter-spacing: -0.01em; }
+      .intro p { margin: 0 0 12px; max-width: 62ch; color: var(--muted); font-size: 13px; line-height: 1.5; }
+      .card { padding: 18px 20px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; box-shadow: var(--shadow); }
+      .card h2 { margin: 0; font-size: 14px; font-weight: 600; }
+      .card > .hint { display: block; margin: 4px 0 0; }
+      .fields { display: grid; gap: 14px; margin-top: 16px; }
+      .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+      .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+      .field > span { font-size: 12.5px; font-weight: 600; }
+      .field input, .field textarea { width: 100%; padding: 8px 10px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); color: var(--text); font-family: var(--mono); font-size: 12.5px; }
+      .field input::placeholder, .field textarea::placeholder { color: var(--subtle); }
+      .field input:focus, .field textarea:focus { outline: 2px solid var(--accent-soft); border-color: var(--accent); }
+      .field textarea { resize: vertical; min-height: 56px; }
+      .field--toggle { flex-direction: row; align-items: flex-start; gap: 10px; }
+      .field--toggle input { width: auto; margin: 2px 0 0; accent-color: var(--accent); }
+      .field--toggle > div { display: flex; flex-direction: column; gap: 4px; }
+      .field--toggle > div > span { font-size: 12.5px; font-weight: 600; }
+      .hint { color: var(--muted); font-size: 11.5px; line-height: 1.4; }
+      .subheading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 18px; padding-top: 14px; border-top: 1px solid var(--line); }
+      .subheading span { color: var(--muted); font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; }
+      .iface { display: grid; grid-template-columns: 2fr 1fr 1fr auto; gap: 12px; align-items: end; margin-top: 12px; }
+      .button { padding: 7px 12px; border: 1px solid var(--line-strong); border-radius: 8px; background: var(--surface); color: var(--text); font-size: 12px; font-weight: 600; }
+      .button:hover { background: var(--surface-muted); }
+      .button--quiet { border-color: transparent; background: transparent; color: var(--muted); }
+      .card__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+      .card__head div { display: flex; gap: 6px; }
+      pre { margin: 0; padding: 12px 14px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-muted); font-family: var(--mono); font-size: 12px; line-height: 1.55; white-space: pre-wrap; word-break: break-word; }
+      .issues { margin: 0; padding: 12px 14px 12px 30px; border: 1px solid #efc0bb; border-radius: 10px; background: #fff7f6; color: var(--danger); font-size: 12.5px; }
+      [hidden] { display: none !important; }
+      @media (max-width: 1100px) {
+        .setup { grid-template-columns: 1fr; }
+        .setup__output { position: static; max-height: none; }
+      }
+      @media (max-width: 720px) {
+        .top, .setup { padding-left: 16px; padding-right: 16px; }
+        .grid { grid-template-columns: 1fr; }
+        .iface { grid-template-columns: 1fr 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="top">
+      <span class="mark" aria-hidden="true"></span>
+      <strong>Anyserve</strong>
+      <span class="top__title">Setup</span>
+      <a class="top__link" href="https://github.com/anyserve/anyserve">github.com/anyserve/anyserve</a>
+    </header>
+
+    <main class="setup">
+      <form class="setup__form" id="form" autocomplete="off" spellcheck="false">
+        <div class="intro">
+          <h1>Set up a control plane</h1>
+          <p>
+            Fill in what differs from the defaults. The file and commands on the right update as you type;
+            copy them to the host that runs <code>anyserve serve</code>.
+          </p>
+          <button type="button" class="button" id="reset">Reset to defaults</button>
+        </div>
+
+        <section class="card">
+          <h2>Server</h2>
+          <span class="hint">Where clients and workers connect.</span>
+          <div class="fields">
+            <label class="field">
+              <span>gRPC host</span>
+              <input name="grpc_host" value="127.0.0.1" />
+              <span class="hint">127.0.0.1 keeps it local; 0.0.0.0 accepts other hosts.</span>
+            </label>
+            <label class="field">
+              <span>gRPC port</span>
+              <input name="grpc_port" value="50052" />
+            </label>
+            <label class="field field--toggle">
+              <input type="checkbox" name="tls" />
+              <div><span>TLS for gRPC</span></div>
+            </label>
+            <div class="fields" data-show="tls" hidden>
+              <label class="field"><span>Certificate file</span><input name="cert_file" placeholder="/etc/anyserve/tls.crt" /></label>
+              <label class="field"><span>Key file</span><input name="key_file" placeholder="/etc/anyserve/tls.key" /></label>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>Journal</h2>
+          <span class="hint">Durable jobs survive a restart when the journal is on persistent storage.</span>
+          <div class="fields">
+            <label class="field field--toggle">
+              <input type="checkbox" name="journal" checked />
+              <div><span>Enable the journal</span></div>
+            </label>
+            <div class="fields" data-show="journal">
+              <label class="field">
+                <span>Path</span>
+                <input name="journal_path" value=".anyserve/journal.sqlite" />
+                <span class="hint">Relative paths resolve from the server's working directory.</span>
+              </label>
+              <label class="field field--toggle">
+                <input type="checkbox" name="full_sync" checked />
+                <div><span>Full fsync on every commit</span><span class="hint">Off trades power-loss durability for faster commits.</span></div>
+              </label>
+              <label class="field"><span>Retention (s)</span><input name="retention_secs" value="604800" /><span class="hint">Finished durable jobs stay in the journal this long.</span></label>
+              <label class="field"><span>Queue capacity</span><input name="queue_capacity" value="4096" /><span class="hint">Operations waiting for a commit.</span></label>
+              <label class="field"><span>Max batch</span><input name="max_batch" value="256" /><span class="hint">Operations merged into one group commit.</span></label>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>Authentication</h2>
+          <span class="hint">One token per line. Leave both empty only on a trusted network.</span>
+          <div class="fields">
+            <label class="field"><span>Client tokens</span><textarea name="client_tokens" rows="2"></textarea><span class="hint">Used by applications, the job CLI and the console.</span></label>
+            <label class="field"><span>Worker tokens</span><textarea name="worker_tokens" rows="2"></textarea><span class="hint">Used by workers when they connect.</span></label>
+            <label class="field"><span>Client tokens from env</span><input name="client_tokens_env" placeholder="ANYSERVE_CLIENT_TOKENS" /><span class="hint">Name of a variable holding comma-separated tokens.</span></label>
+            <label class="field"><span>Worker tokens from env</span><input name="worker_tokens_env" placeholder="ANYSERVE_WORKER_TOKENS" /></label>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>Console</h2>
+          <span class="hint">Management API, health probes and metrics.</span>
+          <div class="fields">
+            <label class="field field--toggle">
+              <input type="checkbox" name="console" checked />
+              <div><span>Enable the console listener</span></div>
+            </label>
+            <div class="fields" data-show="console">
+              <label class="field"><span>Listen</span><input name="console_listen" value="127.0.0.1:3001" /></label>
+              <label class="field"><span>Allowed origins</span><textarea name="allowed_origins" rows="2" placeholder="http://localhost:5173"></textarea><span class="hint">Browser origins allowed to call the API, one per line.</span></label>
+            </div>
+          </div>
+        </section>
+
+        <section class="card">
+          <h2>Runtime</h2>
+          <span class="hint">The defaults suit most deployments. Empty fields keep them.</span>
+          <div class="fields">
+            <div class="grid" id="runtime"></div>
+            <div class="subheading">
+              <span>Per-interface overrides</span>
+              <button type="button" class="button" id="add-interface">Add interface</button>
+            </div>
+            <div id="interfaces"></div>
+          </div>
+        </section>
+      </form>
+
+      <aside class="setup__output">
+        <ul class="issues" id="issues" role="alert" hidden></ul>
+        <section class="card">
+          <div class="card__head">
+            <h2>server.toml</h2>
+            <div>
+              <button type="button" class="button button--quiet" data-download="server.toml" data-target="toml">Download</button>
+              <button type="button" class="button" data-copy="toml">Copy</button>
+            </div>
+          </div>
+          <pre id="toml"></pre>
+        </section>
+        <section class="card">
+          <div class="card__head">
+            <h2>Start the control plane</h2>
+            <div><button type="button" class="button" data-copy="start">Copy</button></div>
+          </div>
+          <pre id="start"></pre>
+        </section>
+        <section class="card">
+          <div class="card__head">
+            <h2>Connect a client and a worker</h2>
+            <div><button type="button" class="button" data-copy="client">Copy</button></div>
+          </div>
+          <pre id="client"></pre>
+        </section>
+      </aside>
+    </main>
+
+    <script type="module">
+      import { RUNTIME_FIELDS, buildClientSnippet, buildServeCommand, buildServerToml, problems } from "./config.js";
+
+      const form = document.getElementById("form");
+      const field = (name) => form.elements[name];
+
+      const runtime = document.getElementById("runtime");
+      for (const item of RUNTIME_FIELDS) {
+        const label = document.createElement("label");
+        label.className = "field";
+        label.innerHTML = `<span></span><input placeholder="" /><span class="hint"></span>`;
+        label.querySelector("span").textContent = item.label;
+        const input = label.querySelector("input");
+        input.name = `runtime.${item.key}`;
+        input.placeholder = item.default;
+        label.querySelector(".hint").textContent = item.hint;
+        runtime.appendChild(label);
+      }
+
+      const interfaces = document.getElementById("interfaces");
+      function addInterface() {
+        const row = document.createElement("div");
+        row.className = "iface";
+        row.innerHTML = `
+          <label class="field"><span>Interface</span><input data-key="name" placeholder="image.v1" /></label>
+          <label class="field"><span>Max queue</span><input data-key="max_queue" /></label>
+          <label class="field"><span>Queue timeout (ms)</span><input data-key="queue_timeout_ms" /></label>
+          <button type="button" class="button button--quiet">Remove</button>`;
+        row.querySelector("button").addEventListener("click", () => {
+          row.remove();
+          render();
+        });
+        interfaces.appendChild(row);
+      }
+      document.getElementById("add-interface").addEventListener("click", () => {
+        addInterface();
+        render();
+      });
+
+      function collect() {
+        return {
+          grpc_host: field("grpc_host").value,
+          grpc_port: field("grpc_port").value,
+          tls: field("tls").checked,
+          cert_file: field("cert_file").value,
+          key_file: field("key_file").value,
+          journal: field("journal").checked,
+          journal_path: field("journal_path").value,
+          full_sync: field("full_sync").checked,
+          retention_secs: field("retention_secs").value,
+          queue_capacity: field("queue_capacity").value,
+          max_batch: field("max_batch").value,
+          client_tokens: field("client_tokens").value,
+          worker_tokens: field("worker_tokens").value,
+          client_tokens_env: field("client_tokens_env").value,
+          worker_tokens_env: field("worker_tokens_env").value,
+          console: field("console").checked,
+          console_listen: field("console_listen").value,
+          allowed_origins: field("allowed_origins").value,
+          runtime: Object.fromEntries(RUNTIME_FIELDS.map((item) => [item.key, field(`runtime.${item.key}`).value])),
+          interfaces: Array.from(interfaces.querySelectorAll(".iface")).map((row) =>
+            Object.fromEntries(Array.from(row.querySelectorAll("input")).map((input) => [input.dataset.key, input.value])),
+          ),
+        };
+      }
+
+      function render() {
+        for (const box of form.querySelectorAll("[data-show]")) {
+          box.hidden = !field(box.dataset.show).checked;
+        }
+        const state = collect();
+        const command = buildServeCommand(state);
+        document.getElementById("toml").textContent = buildServerToml(state);
+        document.getElementById("start").textContent = command.flagsOnly
+          ? `${command.withConfig}\n\n# the same deployment without a file\n${command.flagsOnly}`
+          : `${command.withConfig}\n\n# tokens, console and runtime limits need the file`;
+        document.getElementById("client").textContent = buildClientSnippet(state);
+        const issues = problems(state);
+        const list = document.getElementById("issues");
+        list.replaceChildren(...issues.map((issue) => Object.assign(document.createElement("li"), { textContent: issue })));
+        list.hidden = issues.length === 0;
+      }
+
+      form.addEventListener("input", render);
+      form.addEventListener("change", render);
+      document.getElementById("reset").addEventListener("click", () => {
+        form.reset();
+        interfaces.replaceChildren();
+        render();
+      });
+      for (const button of document.querySelectorAll("[data-copy]")) {
+        button.addEventListener("click", async () => {
+          try {
+            await navigator.clipboard.writeText(document.getElementById(button.dataset.copy).textContent);
+            button.textContent = "Copied";
+            setTimeout(() => (button.textContent = "Copy"), 1500);
+          } catch {
+            button.textContent = "Copy";
+          }
+        });
+      }
+      for (const button of document.querySelectorAll("[data-download]")) {
+        button.addEventListener("click", () => {
+          const text = document.getElementById(button.dataset.target).textContent;
+          const url = URL.createObjectURL(new Blob([text], { type: "text/plain" }));
+          const link = Object.assign(document.createElement("a"), { href: url, download: button.dataset.download });
+          link.click();
+          URL.revokeObjectURL(url);
+        });
+      }
+      render();
+    </script>
+  </body>
+</html>

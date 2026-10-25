@@ -12,6 +12,10 @@ routes opaque bytes; the worker decides what they mean.
 | [`comfyui/`](comfyui) | ComfyUI | workflow in API format | the first image the workflow saved |
 | [`video/`](video) | Ultralytics YOLO | live JPEG frames over a duplex Invoke | annotated frames |
 
+[`setup/`](setup) is a static page that writes a `server.toml` and the matching
+`anyserve serve` command from a form, with the client and worker snippets that
+connect to it; it is published with GitHub Pages from this repository.
+
 Every example needs a running control plane and the `anyserve` Python package
 (Python 3.12+):
 
