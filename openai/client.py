@@ -1,4 +1,4 @@
-"""Chat with a vLLM model through anyserve, streaming tokens as they arrive."""
+"""Chat with a model on any OpenAI-compatible server through anyserve, streaming tokens as they arrive."""
 from __future__ import annotations
 import argparse
 import json
@@ -9,12 +9,12 @@ from anyserve import AnyserveClient, ExecutionOptions
 def main() -> None:
     parser = argparse.ArgumentParser(description="Send one chat prompt through anyserve.")
     parser.add_argument("--endpoint", default="http://127.0.0.1:50052")
-    parser.add_argument("--model", required=True, help="model name; the interface is vllm/<model>")
+    parser.add_argument("--model", required=True, help="model name; the interface is openai/chat/<model>")
     parser.add_argument("--prompt", default="Say hello in one sentence.")
     parser.add_argument("--no-stream", action="store_true", help="wait for the whole reply instead of streaming")
     args = parser.parse_args()
     client = AnyserveClient(args.endpoint)
-    interface = f"vllm/{args.model}"
+    interface = f"openai/chat/{args.model}"
     request = {"messages": [{"role": "user", "content": args.prompt}], "max_tokens": 256, "stream": not args.no_stream}
     options = ExecutionOptions(total_timeout_ms=300_000)
     if args.no_stream:

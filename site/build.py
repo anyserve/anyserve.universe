@@ -14,8 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / "site" / "out"
 PAGES = [
     ("", "Overview", ROOT / "README.md"),
+    ("openai", "OpenAI-compatible", ROOT / "openai" / "README.md"),
     ("triton", "Triton", ROOT / "triton" / "README.md"),
-    ("vllm", "vLLM", ROOT / "vllm" / "README.md"),
     ("comfyui", "ComfyUI", ROOT / "comfyui" / "README.md"),
     ("video", "Video", ROOT / "video" / "README.md"),
     ("vla", "VLA", ROOT / "vla" / "README.md"),

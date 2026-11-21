@@ -1,14 +1,15 @@
 # anyserve.universe
 
-Workers that put real backends behind [anyserve](https://github.com/anyserve/anyserve).
-Each directory is one example: a worker that owns the backend's protocol, and a
+Connectors that put real backends behind [anyserve](https://github.com/anyserve/anyserve).
+Each directory is one connector: a worker that owns the backend's protocol, and a
 client that calls it through the anyserve control plane. The control plane
-routes opaque bytes; the worker decides what they mean.
+routes opaque bytes; the connector decides what they mean. Nothing here is part
+of the anyserve binary: a connector is an ordinary worker on the SDK.
 
-| Example | Backend | Payload | Result |
+| Connector | Backend | Payload | Result |
 |---|---|---|---|
+| [`openai/`](openai) | any OpenAI-compatible server: vLLM, Ollama, LM Studio, llama.cpp, embedding servers | chat completions, completions or embeddings request | response body, or one output frame per server-sent event when streaming |
 | [`triton/`](triton) | Triton Inference Server | KServe v2 inference request | Triton's response body |
-| [`vllm/`](vllm) | vLLM or any OpenAI-compatible server | chat completions request | response body, or one output frame per server-sent event when streaming |
 | [`comfyui/`](comfyui) | ComfyUI | workflow in API format | the first image the workflow saved |
 | [`video/`](video) | Ultralytics YOLO | live JPEG frames over a duplex Invoke | annotated frames |
 | [`vla/`](vla) | a vision-language-action policy (simulated, swappable for a real model) | one robot observation: instruction, state, camera frame | a chunk of actions for the next control ticks |
@@ -18,7 +19,7 @@ routes opaque bytes; the worker decides what they mean.
 connect to it. These pages are published at https://anyserve.github.io/anyserve.universe/
 from the READMEs in this repository.
 
-Every example needs a running control plane and the `anyserve` Python package
+Every connector needs a running control plane and the `anyserve` Python package
 (Python 3.12+):
 
 ```bash
