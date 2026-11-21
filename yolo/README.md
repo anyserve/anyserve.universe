@@ -1,18 +1,30 @@
 # YOLO
 
-`worker.py` runs an Ultralytics YOLO model in the worker process, on live
-video. A duplex Invoke on the interface `yolo.detect.v1` carries JPEG frames to
-the worker and annotated frames back, one invocation per batch of frames. The client processes each frame's
-result before sending the next one and rotates invocations before the input
-replay budget fills. Video processing needs OpenCV and Ultralytics.
+`worker.py` runs an Ultralytics YOLO model in the worker process on the
+interface `yolo/<model>`, such as `yolo/yolo11n`. One call is one image: the
+payload is the encoded image, JPEG or PNG, and the result is the detections.
 
-```bash
-pip install -r requirements.txt
-python worker.py --device auto            # cuda, mps or cpu
-python client.py --source 0               # a webcam, or a path to an mp4
-python client.py --source demo.mp4 --headless --max-frames 120
+```json
+{"detections": [{"label": "person", "confidence": 0.91, "box": [48.2, 398.1, 245.0, 902.7]}], "inference_ms": 10.5}
 ```
 
-Press `q` in the OpenCV window to stop capture and finish the current
-invocation. Closing an active invocation cancels it. `common.py` holds the
-application framing; anyserve itself transports opaque bytes.
+`client.py` plays a video or a camera feed against it, one call per frame. A
+frame that misses `--budget-ms` is dropped instead of delaying the ones behind it.
+
+```bash
+pip install ultralytics
+python worker.py --model yolo11n.pt
+python client.py --source demo.mp4            # or --source 0 for a camera; --show draws the boxes
+```
+
+The worker takes one image at a time. Cameras share a worker frame by frame,
+and a second worker adds capacity without a change to the clients.
+
+On a Tesla T4 with YOLO11n and 640×480 video:
+
+| Setup | Each camera |
+|---|---|
+| the model called in process, no anyserve | 71 fps, 14.0 ms a frame |
+| one camera, one worker | 62 fps, p50 15.6 ms |
+| two cameras, one worker | 37 fps, p50 26.9 ms |
+| two cameras, two workers on the same GPU | 56 fps, p50 17.0 ms |

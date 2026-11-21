@@ -1,48 +1,47 @@
+"""Run an Ultralytics YOLO model behind anyserve.
+
+One call is one image. The payload is the encoded image, JPEG or PNG, and the
+result is the detections:
+
+    {"detections": [{"label": "person", "confidence": 0.91, "box": [x1, y1, x2, y2]}, ...], "inference_ms": 7.9}
+"""
 from __future__ import annotations
 import argparse
+import json
 import time
+from pathlib import Path
 
-from anyserve import serve, worker
-from common import VIDEO_INTERFACE, assemble_inputs, decode_jpeg, encode_jpeg, now_ms, pack_frame
+import cv2
+import numpy
+from ultralytics import YOLO
+
+from anyserve import WorkerError, serve, worker
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run YOLO on live JPEG inputs over one outbound Anyserve session.")
-    parser.add_argument("--endpoint", default="http://127.0.0.1:50052")
-    parser.add_argument("--worker-id")
-    parser.add_argument("--model", default="yolo11n.pt")
-    parser.add_argument("--device", default="auto")
-    parser.add_argument("--tracker", help="Optional Ultralytics tracker configuration")
-    parser.add_argument("--conf", type=float, default=0.25)
-    parser.add_argument("--iou", type=float, default=0.45)
-    parser.add_argument("--imgsz", type=int, default=640)
-    parser.add_argument("--jpeg-quality", type=int, default=80)
+    parser = argparse.ArgumentParser(description="Serve a YOLO model through anyserve.")
+    parser.add_argument("--endpoint", help="anyserve control plane; default: ANYSERVE_ENDPOINT or http://127.0.0.1:50052")
+    parser.add_argument("--model", default="yolo11n.pt", help="weights to load; the interface is yolo/<name>, such as yolo/yolo11n")
+    parser.add_argument("--conf", type=float, default=0.25, help="lowest confidence to report")
+    parser.add_argument("--attr", action="append", default=[], metavar="KEY=VALUE", help="worker attribute for placement, such as site=edge (repeatable)")
     args = parser.parse_args()
-    from ultralytics import YOLO
-    import torch
-    device = args.device
-    if device == "auto":
-        device = "cuda:0" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
     model = YOLO(args.model)
+    model.predict(numpy.zeros((640, 640, 3), numpy.uint8), verbose=False)  # load the weights before taking calls
 
-    @worker(interface=VIDEO_INTERFACE, capacity={"slot": 1}, attributes={"device": device},
-            streaming_input=True, pass_context=True)
-    def detect(chunks, context):
-        for payload, metadata in assemble_inputs(chunks):
-            if context.cancelled:
-                return
-            frame = decode_jpeg(payload)
-            started = time.perf_counter()
-            options = {"source": frame, "device": device, "conf": args.conf,
-                       "iou": args.iou, "imgsz": args.imgsz, "verbose": False}
-            result = model.track(persist=True, tracker=args.tracker, **options)[0] if args.tracker else model.predict(**options)[0]
-            inference_ms = (time.perf_counter() - started) * 1000
-            boxes = result.boxes
-            info = {**metadata, "job_id": context.job_id, "worker_completed_at_ms": now_ms(),
-                    "inference_ms": round(inference_ms, 2), "objects": len(boxes) if boxes is not None else 0}
-            yield pack_frame(encode_jpeg(result.plot(), args.jpeg_quality), info)
+    # One image at a time: the model runs on one device.
+    @worker(interface=f"yolo/{Path(args.model).stem}", attributes=dict(item.partition("=")[::2] for item in args.attr),
+            max_active_leases=1)
+    def detect(image: bytes) -> bytes:
+        frame = cv2.imdecode(numpy.frombuffer(image, numpy.uint8), cv2.IMREAD_COLOR)
+        if frame is None:
+            raise WorkerError("the payload is not a JPEG or PNG image")
+        started = time.perf_counter()
+        boxes = model.predict(frame, conf=args.conf, verbose=False)[0].boxes
+        detections = [{"label": model.names[int(label)], "confidence": round(confidence, 3), "box": [round(value, 1) for value in box]}
+                      for box, confidence, label in zip(boxes.xyxy.tolist(), boxes.conf.tolist(), boxes.cls.tolist())]
+        return json.dumps({"detections": detections, "inference_ms": round((time.perf_counter() - started) * 1000, 1)}).encode()
 
-    serve(detect, args.endpoint, worker_id=args.worker_id)
+    serve(detect, args.endpoint)
 
 
 if __name__ == "__main__":

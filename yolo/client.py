@@ -1,86 +1,55 @@
+"""Detect objects in a video or a camera feed, one anyserve call per frame."""
 from __future__ import annotations
 import argparse
+import json
+import time
+
+import cv2
 
 from anyserve import AnyserveClient, ExecutionOptions
-from common import VIDEO_INTERFACE, FrameDecoder, decode_jpeg, encode_jpeg, now_ms
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Send live JPEG frames and render results before InputEnd.")
-    parser.add_argument("--endpoint", default="http://127.0.0.1:50052")
-    parser.add_argument("--source", default="0")
-    parser.add_argument("--width", type=int, default=1280)
-    parser.add_argument("--height", type=int, default=720)
-    parser.add_argument("--jpeg-quality", type=int, default=80)
-    parser.add_argument("--max-frames", type=int, default=120, help="0 continues until the source ends or the window is closed")
-    parser.add_argument("--headless", action="store_true")
+    parser = argparse.ArgumentParser(description="Send video frames to a YOLO model through anyserve.")
+    parser.add_argument("--endpoint", help="default: ANYSERVE_ENDPOINT or http://127.0.0.1:50052")
+    parser.add_argument("--model", default="yolo11n", help="the interface is yolo/<model>")
+    parser.add_argument("--source", default="0", help="a camera index or a video file")
+    parser.add_argument("--frames", type=int, default=0, help="stop after this many frames; 0 plays the whole source")
+    parser.add_argument("--budget-ms", type=int, default=1000, help="time one frame may take before it is dropped")
+    parser.add_argument("--show", action="store_true", help="draw the boxes in a window; q closes it")
     args = parser.parse_args()
-    import cv2
-    source = int(args.source) if args.source.isdigit() else args.source
-    capture = cv2.VideoCapture(source)
+    capture = cv2.VideoCapture(int(args.source) if args.source.isdigit() else args.source)
     if not capture.isOpened():
         raise SystemExit(f"could not open {args.source!r}")
-    capture.set(cv2.CAP_PROP_FRAME_WIDTH, args.width)
-    capture.set(cv2.CAP_PROP_FRAME_HEIGHT, args.height)
     client = AnyserveClient(args.endpoint)
-    index = 0
-    ended = False
-    preferred_worker = None
-    try:
-        while not ended and (args.max_frames == 0 or index < args.max_frames):
-            options = ExecutionOptions(required_capacity={"slot": 1}, max_attempts=1,
-                queue_timeout_ms=5_000, total_timeout_ms=120_000,
-                preferred_attributes={"worker_id": preferred_worker} if preferred_worker else {}, spillover_after_ms=100)
-            decoder = FrameDecoder()
-            # Rotate before the 32MiB input replay budget; camera lifetime is
-            # independent of one bounded execution's input history.
-            with client.invoke_stream(VIDEO_INTERFACE, options=options) as execution:
-                sent = 0
-                for _ in range(120):
-                    if args.max_frames and index >= args.max_frames:
-                        ended = True
-                        break
-                    ok, frame = capture.read()
-                    if not ok:
-                        ended = True
-                        break
-                    payload = encode_jpeg(frame, args.jpeg_quality)
-                    if len(payload) > 16 * 1024 * 1024:
-                        raise ValueError("encoded frame exceeds the inline object budget")
-                    if sent + len(payload) > 24 * 1024 * 1024:
-                        # This captured frame is skipped at the batch boundary.
-                        break
-                    execution.send(payload, {"frame_index": str(index), "captured_at_ms": str(now_ms())})
-                    sent += len(payload)
-                    received = False
-                    while not received:
-                        event = next(execution)
-                        if event["type"] == "assigned":
-                            preferred_worker = event["worker_id"]
-                        elif event["type"] == "output":
-                            for image, metadata in decoder.feed(event["data"]):
-                                latency = now_ms() - int(metadata["captured_at_ms"])
-                                print(f"frame={metadata['frame_index']} e2e={latency}ms inference={metadata['inference_ms']}ms objects={metadata['objects']}")
-                                if not args.headless:
-                                    cv2.imshow("Anyserve video", decode_jpeg(image))
-                                    ended = cv2.waitKey(1) & 0xFF == ord("q")
-                                received = True
-                        elif event["type"] == "finished":
-                            raise RuntimeError(f"execution ended before its frame response: {event}")
-                    index += 1
-                    if ended:
-                        break
-                execution.finish_input()
-                for event in execution:
-                    if event["type"] == "output":
-                        decoder.feed(event["data"])
-                    elif event["type"] == "finished" and event["state"] != "succeeded":
-                        raise RuntimeError(str(event.get("error")))
-                decoder.finish()
-    finally:
-        capture.release()
-        if not args.headless:
-            cv2.destroyAllWindows()
+    options = ExecutionOptions(queue_timeout_ms=args.budget_ms, total_timeout_ms=args.budget_ms, max_attempts=1)
+    latencies, dropped = [], 0
+    started = time.perf_counter()
+    while not args.frames or len(latencies) + dropped < args.frames:
+        ok, frame = capture.read()
+        if not ok:
+            break
+        sent = time.perf_counter()
+        try:
+            reply = json.loads(client.call(f"yolo/{args.model}", cv2.imencode(".jpg", frame)[1].tobytes(), options=options))
+        except RuntimeError:
+            dropped += 1  # a late frame is worth nothing to live video
+            continue
+        latencies.append((time.perf_counter() - sent) * 1000)
+        if args.show:
+            for detection in reply["detections"]:
+                x1, y1, x2, y2 = map(int, detection["box"])
+                cv2.rectangle(frame, (x1, y1), (x2, y2), (0, 200, 0), 2)
+                cv2.putText(frame, detection["label"], (x1, y1 - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 200, 0), 1)
+            cv2.imshow("yolo", frame)
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                break
+    if not latencies:
+        raise SystemExit(f"no frame was answered; {dropped} dropped")
+    latencies.sort()
+    print(f"{len(latencies)} frames at {len(latencies) / (time.perf_counter() - started):.1f} fps, {dropped} dropped, "
+          f"latency p50 {latencies[len(latencies) // 2]:.1f} ms, max {latencies[-1]:.1f} ms; "
+          f"last frame: {len(reply['detections'])} objects, inference {reply['inference_ms']} ms")
 
 
 if __name__ == "__main__":

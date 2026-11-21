@@ -1,80 +1,90 @@
-"""Serve a vision-language-action policy through anyserve.
+"""Serve SmolVLA, a vision-language-action policy, through anyserve.
 
-The payload is one observation (instruction, proprioceptive state and a camera
-frame) and the result is a chunk of actions, the shape robot control loops use
-with VLA models such as OpenVLA or pi0. The built-in policy stands in for a
-model: it finds the target in the frame and plans a few steps toward it, after
-a configurable inference delay. ``--policy module:callable`` swaps in a real
-model; ``--policy smolvla:policy`` is SmolVLA, with the observation it takes
-described in ``smolvla.py``.
+One call is one robot observation and the result is the next chunk of actions,
+50 per inference:
 
-Observation: {"instruction": str, "state": [x, y], "image_png": base64}
-Action chunk: {"actions": [[dx, dy], ...], "policy": str}
+    payload  {"instruction": str, "state": [float, ...], "images": {"camera1": base64 JPEG or PNG, ...}}
+    result   {"actions": [[float, ...], ...], "inference_ms": float}
+
+A camera the observation leaves out reaches the model as a black frame. A
+fine-tuned checkpoint carries the statistics that scale joint values for its
+robot. The base checkpoint does not: without ``--stats`` it answers in
+normalized values instead of the robot's units.
 """
 from __future__ import annotations
 import argparse
 import base64
-import importlib
+import io
+import json
+import os
 import time
+
+import numpy
+import torch
+from huggingface_hub import hf_hub_download
+from lerobot.policies.factory import make_pre_post_processors
+from lerobot.policies.smolvla.modeling_smolvla import SmolVLAPolicy
+from PIL import Image
 
 from anyserve import WorkerError, serve, worker
 
-from common import TARGET, decode_png, locate
-
-
-class SimulatedPolicy:
-    """Looks for the red marker in the frame and moves toward it, one chunk at a time."""
-
-    name = "simulated"
-
-    def __init__(self, chunk: int, step: float, latency_ms: float) -> None:
-        self.chunk, self.step, self.latency = chunk, step, latency_ms / 1000
-
-    def __call__(self, observation: dict) -> dict:
-        width, height, pixels = decode_png(base64.b64decode(observation["image_png"]))
-        target = locate(pixels, width, height, TARGET)
-        if target is None:
-            raise WorkerError("no target in view")
-        time.sleep(self.latency)
-        x, y = observation["state"]
-        actions = []
-        for _ in range(self.chunk):
-            dx, dy = target[0] - x, target[1] - y
-            scale = min(1.0, self.step / max(1e-9, (dx * dx + dy * dy) ** 0.5))
-            dx, dy = dx * scale, dy * scale
-            x, y = x + dx, y + dy
-            actions.append([round(dx, 4), round(dy, 4)])
-        return {"actions": actions, "policy": self.name}
-
-
-def load_policy(spec: str, chunk: int, step: float, latency_ms: float):
-    if spec == "simulated":
-        return SimulatedPolicy(chunk, step, latency_ms)
-    module_name, _, attribute = spec.partition(":")
-    policy = getattr(importlib.import_module(module_name), attribute or "act")
-    return policy
+IMAGES = "observation.images."
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Serve a VLA policy through anyserve.")
-    parser.add_argument("--endpoint", help="default: ANYSERVE_ENDPOINT or http://127.0.0.1:50052")
-    parser.add_argument("--interface", default="vla.v1")
-    parser.add_argument("--site", default="edge", help="attribute robots use to prefer the near policy server")
-    parser.add_argument("--policy", default="simulated", help="simulated, or module:callable taking an observation")
-    parser.add_argument("--chunk", type=int, default=8, help="actions per inference")
-    parser.add_argument("--step", type=float, default=0.03, help="largest move per action, in unit coordinates")
-    parser.add_argument("--latency-ms", type=float, default=20, help="simulated inference time")
-    parser.add_argument("--worker-id")
+    parser = argparse.ArgumentParser(description="Serve SmolVLA through anyserve.")
+    parser.add_argument("--endpoint", help="anyserve control plane; default: ANYSERVE_ENDPOINT or http://127.0.0.1:50052")
+    parser.add_argument("--model", default="lerobot/smolvla_base", help="checkpoint to load; the interface is vla/<model>")
+    parser.add_argument("--stats", help="LeRobot dataset, or the path of its meta/stats.json, to scale joint values with")
+    parser.add_argument("--attr", action="append", default=[], metavar="KEY=VALUE", help="worker attribute for placement, such as site=edge (repeatable)")
     args = parser.parse_args()
-    policy = load_policy(args.policy, args.chunk, args.step, args.latency_ms)
 
-    # One inference at a time: a policy model serves one robot step per call.
-    @worker(interface=args.interface, attributes={"site": args.site, "policy": getattr(policy, "name", args.policy)},
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    policy = SmolVLAPolicy.from_pretrained(args.model).to(device).eval()
+    stats = {"stats": load_stats(args.stats)} if args.stats else {}
+    pre, post = make_pre_post_processors(
+        policy.config, pretrained_path=args.model,
+        preprocessor_overrides={"device_processor": {"device": device}, "normalizer_processor": stats},
+        postprocessor_overrides={"unnormalizer_processor": stats})
+    features = policy.config.input_features
+    joints = features["observation.state"].shape[0]
+    cameras = {key[len(IMAGES):]: tuple(feature.shape) for key, feature in features.items() if key.startswith(IMAGES)}
+
+    # One inference at a time: the model serves one robot step per call.
+    @worker(interface=f"vla/{args.model}", attributes=dict(item.partition("=")[::2] for item in args.attr),
             codec="json", max_active_leases=1)
     def act(observation: dict) -> dict:
-        return policy(observation)
+        started = time.perf_counter()
+        state, images = observation.get("state"), observation.get("images") or {}
+        if not isinstance(state, list) or len(state) != joints:
+            raise WorkerError(f"state must be a list of {joints} numbers")
+        if set(images) - set(cameras):
+            raise WorkerError(f"unknown camera {sorted(set(images) - set(cameras))[0]!r}; this checkpoint takes {sorted(cameras)}")
+        batch = {"observation.state": torch.tensor(state, dtype=torch.float32), "task": str(observation.get("instruction", ""))}
+        for camera, shape in cameras.items():
+            batch[IMAGES + camera] = decode(images[camera]) if camera in images else torch.zeros(shape)
+        with torch.inference_mode():
+            actions = post(policy.predict_action_chunk(pre(batch)))[0].float().cpu().tolist()
+        return {"actions": [[round(value, 4) for value in action] for action in actions],
+                "inference_ms": round((time.perf_counter() - started) * 1000, 1)}
 
-    serve(act, args.endpoint, worker_id=args.worker_id)
+    act({"state": [0.0] * joints})  # the first inference is slow; pay for it before taking calls
+    serve(act, args.endpoint)
+
+
+def decode(image: str) -> torch.Tensor:
+    try:
+        pixels = numpy.array(Image.open(io.BytesIO(base64.b64decode(image))).convert("RGB"))
+    except Exception as error:
+        raise WorkerError(f"a camera frame is not a JPEG or PNG image: {error}")
+    return torch.from_numpy(pixels).permute(2, 0, 1).float() / 255
+
+
+def load_stats(source: str) -> dict:
+    path = source if os.path.exists(source) else hf_hub_download(source, "meta/stats.json", repo_type="dataset")
+    with open(path) as file:
+        stats = json.load(file)
+    return {key: {name: torch.tensor(value) for name, value in stats[key].items()} for key in ("observation.state", "action")}
 
 
 if __name__ == "__main__":
