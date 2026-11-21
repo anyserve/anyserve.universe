@@ -1,4 +1,0 @@
-anyserve-runtime
-opencv-python
-ultralytics
-lap>=0.5.12
