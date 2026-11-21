@@ -1,7 +1,8 @@
-# Real-time video
+# YOLO
 
-A duplex Invoke carries JPEG frames to a YOLO worker and annotated frames
-back, one invocation per batch of frames. The client processes each frame's
+`worker.py` runs an Ultralytics YOLO model in the worker process, on live
+video. A duplex Invoke on the interface `yolo.detect.v1` carries JPEG frames to
+the worker and annotated frames back, one invocation per batch of frames. The client processes each frame's
 result before sending the next one and rotates invocations before the input
 replay budget fills. Video processing needs OpenCV and Ultralytics.
 

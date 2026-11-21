@@ -5,7 +5,8 @@ frame) and the result is a chunk of actions, the shape robot control loops use
 with VLA models such as OpenVLA or pi0. The built-in policy stands in for a
 model: it finds the target in the frame and plans a few steps toward it, after
 a configurable inference delay. ``--policy module:callable`` swaps in a real
-model behind the same contract.
+model; ``--policy smolvla:policy`` is SmolVLA, with the observation it takes
+described in ``smolvla.py``.
 
 Observation: {"instruction": str, "state": [x, y], "image_png": base64}
 Action chunk: {"actions": [[dx, dy], ...], "policy": str}

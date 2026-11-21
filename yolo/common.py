@@ -4,7 +4,7 @@ import json
 import time
 from typing import Any
 
-VIDEO_INTERFACE = "demo.video.detect.v1"
+VIDEO_INTERFACE = "yolo.detect.v1"
 FRAME_CONTENT_TYPE = "image/jpeg"
 MAX_FRAME_BYTES = 16 * 1024 * 1024
 MAX_HEADER_BYTES = 64 * 1024
