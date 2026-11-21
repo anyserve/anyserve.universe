@@ -9,10 +9,9 @@ of the anyserve binary: a connector is an ordinary worker on the SDK.
 | Connector | Backend | Payload | Result |
 |---|---|---|---|
 | [`openai/`](openai) | any OpenAI-compatible server: vLLM, Ollama, LM Studio, llama.cpp, embedding servers | chat completions, completions or embeddings request | response body, or one output frame per server-sent event when streaming |
-| [`triton/`](triton) | Triton Inference Server | KServe v2 inference request | Triton's response body |
-| [`comfyui/`](comfyui) | ComfyUI | workflow in API format | the first image the workflow saved |
-| [`video/`](video) | Ultralytics YOLO | live JPEG frames over a duplex Invoke | annotated frames |
-| [`vla/`](vla) | a vision-language-action policy (simulated, swappable for a real model) | one robot observation: instruction, state, camera frame | a chunk of actions for the next control ticks |
+| [`triton-inference-server/`](triton-inference-server) | Triton Inference Server | KServe v2 inference request | Triton's response body |
+| [`yolo/`](yolo) | Ultralytics YOLO | live JPEG frames over a duplex Invoke | annotated frames |
+| [`vla/`](vla) | a vision-language-action policy: SmolVLA, or a simulated one that needs no GPU | one robot observation: instruction, state, camera frames | a chunk of actions for the next control ticks |
 
 [`setup/`](setup) is a page that writes a `server.toml` and the matching
 `anyserve serve` command from a form, with the client and worker snippets that

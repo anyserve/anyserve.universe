@@ -15,9 +15,8 @@ OUT = ROOT / "site" / "out"
 PAGES = [
     ("", "Overview", ROOT / "README.md"),
     ("openai", "OpenAI-compatible", ROOT / "openai" / "README.md"),
-    ("triton", "Triton", ROOT / "triton" / "README.md"),
-    ("comfyui", "ComfyUI", ROOT / "comfyui" / "README.md"),
-    ("video", "Video", ROOT / "video" / "README.md"),
+    ("triton-inference-server", "Triton Inference Server", ROOT / "triton-inference-server" / "README.md"),
+    ("yolo", "YOLO", ROOT / "yolo" / "README.md"),
     ("vla", "VLA", ROOT / "vla" / "README.md"),
 ]
 

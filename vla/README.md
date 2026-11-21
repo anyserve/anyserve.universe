@@ -41,3 +41,42 @@ reached the target after 41 ticks: 6 inferences, 0 fallbacks, policy latency p50
 Policy inference runs one observation at a time (`max_active_leases=1`); run
 one worker per policy server and several servers per site when more robots
 share them.
+
+## A real model: SmolVLA
+
+`smolvla.py` puts [SmolVLA](https://huggingface.co/lerobot/smolvla_base), a
+450M-parameter policy from LeRobot, behind the same worker. One inference
+takes the camera frames, the joint state and the instruction and returns the
+next 50 joint targets. It needs about 1 GB of GPU memory.
+
+- **Observation**: `{"instruction": ..., "state": [6 joint values], "images": {"camera1": base64, "camera2": ...}}`,
+  each image a JPEG or PNG. A camera left out reaches the model as a black frame.
+- **Action chunk**: `{"actions": [[6 joint targets], ...], "policy": "smolvla", "inference_ms": ...}`.
+
+```bash
+pip install "lerobot[smolvla,dataset]"
+SMOLVLA_STATS=lerobot/svla_so100_pickplace python worker.py --policy smolvla:policy --site edge
+python replay.py --prefer-site edge
+```
+
+`SMOLVLA_MODEL` names the checkpoint. A fine-tuned checkpoint carries the
+statistics that scale joint values for its robot. The base checkpoint does
+not, and answers in normalized values unless `SMOLVLA_STATS` names a LeRobot
+dataset, or the path of its `meta/stats.json`, to take them from.
+
+`replay.py` plays a recorded episode of a LeRobot dataset in real time. Every
+`--execute` ticks it sends the frame the robot sees now and runs the returned
+actions from the tick the answer arrives, keeping to the chunk it already has
+until then. On a Tesla T4, with the SO-100 pick-and-place episode at 30 Hz:
+
+```text
+454 ticks at 30 Hz: 19 calls, 0 fallbacks, 96% of ticks planned, latency p50 588.5 ms (inference 586.3 ms), max 766.8 ms, action error 12.99 against 8.95 for holding still
+```
+
+One inference spans 18 ticks, which is what the chunk is for: the robot asks
+every 25 ticks and never waits. The call through anyserve costs about 2 ms on
+top of the inference. With a second worker on `--site cloud`, killing the edge
+worker during the episode loses the one call in flight and the cloud worker
+answers the rest. The action error is in joint degrees: the base checkpoint is
+not trained for this arm and its cameras, so it lands no closer to the
+recording than holding still. Fine-tune it and set `SMOLVLA_MODEL`.
