@@ -1,0 +1,36 @@
+name: "batch_scorer"
+backend: "python"
+max_batch_size: 32
+
+input [
+  {
+    name: "FEATURES"
+    data_type: TYPE_FP32
+    dims: [ 4 ]
+  }
+]
+
+output [
+  {
+    name: "SCORE"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+  },
+  {
+    name: "BATCH_SIZE"
+    data_type: TYPE_INT32
+    dims: [ 1 ]
+  }
+]
+
+dynamic_batching {
+  preferred_batch_size: [ 4, 8, 16 ]
+  max_queue_delay_microseconds: 2000
+}
+
+instance_group [
+  {
+    count: 1
+    kind: KIND_CPU
+  }
+]

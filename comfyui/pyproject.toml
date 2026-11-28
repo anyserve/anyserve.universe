@@ -1,0 +1,14 @@
+[project]
+name = "comfyui-anyserve"
+description = "ComfyUI custom nodes for calling remote AI workers through AnyServe (OpenAI/vLLM, YOLO, Triton, or custom workers)."
+version = "0.1.0"
+license = { text = "Apache-2.0" }
+dependencies = ["anyserve-runtime>=0.7.0", "Pillow>=10.0.0", "numpy>=1.24.0"]
+
+[project.urls]
+Repository = "https://github.com/anyserve/anyserve.universe"
+
+[tool.comfy]
+PublisherId = "anyserve"
+DisplayName = "AnyServe Custom Nodes"
+Icon = ""

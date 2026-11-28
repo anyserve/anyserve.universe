@@ -17,7 +17,8 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: python -m compileall -q openai triton-inference-server yolo vla
+      - run: python -m compileall -q openai triton-inference-server yolo vla comfyui ros2
+      - run: python -m json.tool comfyui/workflow_api.json > /dev/null
       - run: python -m pip install markdown && python site/build.py
       - uses: actions/setup-node@v4
         with:

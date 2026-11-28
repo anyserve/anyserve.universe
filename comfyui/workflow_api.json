@@ -1,0 +1,73 @@
+{
+  "1": {
+    "class_type": "AnyServeConfig",
+    "inputs": {
+      "endpoint": "http://anyserve:50052",
+      "token": "",
+      "namespace": "",
+      "timeout_ms": 60000,
+      "required_attributes": "",
+      "preferred_attributes": "",
+      "priority": 0
+    }
+  },
+  "2": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "sample.jpg"
+    }
+  },
+  "3": {
+    "class_type": "AnyServeYOLODetect",
+    "inputs": {
+      "image": ["2", 0],
+      "model": "yolo11n",
+      "min_confidence": 0.25,
+      "labels": "",
+      "mask_padding": 12,
+      "jpeg_quality": 90,
+      "config": ["1", 0]
+    }
+  },
+  "4": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": ["3", 0],
+      "filename_prefix": "anyserve_yolo_annotated"
+    }
+  },
+  "5": {
+    "class_type": "MaskToImage",
+    "inputs": {
+      "mask": ["3", 1]
+    }
+  },
+  "6": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "images": ["5", 0],
+      "filename_prefix": "anyserve_yolo_mask"
+    }
+  },
+  "7": {
+    "class_type": "AnyServeOpenAIChat",
+    "inputs": {
+      "model": "qwen-demo",
+      "prompt": "Expand into a concise cinematic prompt: a robot arm sorting apples on a workbench",
+      "system_prompt": "Reply with one rich image-generation prompt sentence.",
+      "max_tokens": 128,
+      "temperature": 0.5,
+      "config": ["1", 0]
+    }
+  },
+  "8": {
+    "class_type": "AnyServeInvoke",
+    "inputs": {
+      "interface": "demo.echo.v1",
+      "payload_mode": "text",
+      "output_mode": "text",
+      "payload": ["7", 0],
+      "config": ["1", 0]
+    }
+  }
+}

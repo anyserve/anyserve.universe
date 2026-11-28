@@ -14,5 +14,5 @@ python -m http.server --directory setup 8080
 
 `config.js` holds the generator; `node --test setup/config.test.js` checks it.
 The field defaults and hints follow the
-[configuration reference](https://github.com/anyserve/anyserve/blob/main/docs/src/configuration.md);
+[configuration reference](https://github.com/anyserve/anyserve/blob/main/docs/configuration.md);
 keep them in step when a key changes there.

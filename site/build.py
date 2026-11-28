@@ -5,6 +5,7 @@ overview, each example's README is its page, and setup/ is copied as it is.
 Output goes to site/out.
 """
 from __future__ import annotations
+
 import shutil
 from pathlib import Path
 
@@ -15,9 +16,11 @@ OUT = ROOT / "site" / "out"
 PAGES = [
     ("", "Overview", ROOT / "README.md"),
     ("openai", "OpenAI-compatible", ROOT / "openai" / "README.md"),
-    ("triton-inference-server", "Triton Inference Server", ROOT / "triton-inference-server" / "README.md"),
+    ("triton-inference-server", "Triton", ROOT / "triton-inference-server" / "README.md"),
     ("yolo", "YOLO", ROOT / "yolo" / "README.md"),
     ("vla", "VLA", ROOT / "vla" / "README.md"),
+    ("comfyui", "ComfyUI Nodes", ROOT / "comfyui" / "README.md"),
+    ("ros2", "ROS 2 Nodes", ROOT / "ros2" / "README.md"),
 ]
 
 
